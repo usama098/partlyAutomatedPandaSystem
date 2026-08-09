@@ -1,0 +1,58 @@
+{
+  "tenant_name": "Example Tenant",
+  "move_in_date": "27:03:2026",
+  "move_out_date": "20:05:2026",
+  "list_of_support_areas_covered": [
+    {
+      "area_covered": "Be Healthy",
+      "sub_area_covered": "To register with a GP"
+    },
+    {
+      "area_covered": "Stay Safe",
+      "sub_area_covered": "To maintain accommodation"
+    }
+  ],
+  "sessions": [
+    {
+      "session_number": 1,
+      "session": {
+        "session_date": "27:03:2026",
+        "property_address": "22 Example Road, B9 5BD",
+        "contact_type": "In Person",
+        "area_covered": "Stay Safe",
+        "sub_area_covered": "To maintain accommodation",
+        "support_notes": "I met with the tenant for their move-in support session and welcomed them into the supported accommodation. We discussed the house rules, fire safety and how to report repairs.",
+        "support_note_summary": "This session covered the tenant's move-in induction, including house rules, fire safety procedures and how to report repairs, ensuring the tenant understood their responsibilities from day one.",
+        "any_actions_to_be_completed_by_service_user": [
+          "Follow the house rules and respect other tenants.",
+          "Report repairs or safety concerns promptly."
+        ],
+        "any_action_to_be_taken_by_support_worker": [
+          "Check that the tenant has settled safely.",
+          "Prepare GP registration support for the next session."
+        ]
+      },
+      "evidence_picture_description": "A printable A4 move-in checklist titled 'Move-In Induction Checklist' with tick boxes for house rules, fire exits, key safety and a notes area at the bottom."
+    },
+    {
+      "session_number": 2,
+      "session": {
+        "session_date": "03:04:2026",
+        "property_address": "22 Example Road, B9 5BD",
+        "contact_type": "In Person",
+        "area_covered": "Be Healthy",
+        "sub_area_covered": "To register with a GP",
+        "support_notes": "I met with the tenant for a one-hour support session focused on registering with a GP. We gathered the information needed for registration and discussed nearby surgeries.",
+        "support_note_summary": "This session focused on supporting the tenant to gather the details required for GP registration and identify a suitable local surgery to register with.",
+        "any_actions_to_be_completed_by_service_user": [
+          "Choose a suitable GP surgery.",
+          "Complete and submit the registration form."
+        ],
+        "any_action_to_be_taken_by_support_worker": [
+          "Check whether the GP registration has been submitted."
+        ]
+      },
+      "evidence_picture_description": "A printable A4 GP registration tracker titled 'GP Registration Tracker' with a table for surgery name, date contacted, registration status and a notes area."
+    }
+  ]
+}
