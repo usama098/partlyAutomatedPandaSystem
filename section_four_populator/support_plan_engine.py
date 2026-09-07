@@ -45,7 +45,9 @@ from pathlib import Path
 from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 from docx import Document
+from docx.oxml import OxmlElement
 from docx.table import Table
+from docx.text.paragraph import Paragraph
 
 DEFAULT_SUPPORT_PLAN_DIR = (
     Path(__file__).parent.parent / "Templates" / "Section_four" / "Support Plan"
@@ -321,27 +323,47 @@ def append_comment_entry(
     add_blank_line_before: Optional[bool] = None,
 ) -> None:
     """
-    Append one line of free text to a Comments row cell, without disturbing
+    Insert one line of free text at the start of a Comments row cell's
+    entries, directly under the `Comments:` label, without disturbing
     whatever is already there (the template's own blank space, or earlier
     entries from previous calls) - unlike `set_comments`, which overwrites a
     cell outright. This is meant for logging one entry per occurrence (e.g.
-    one per support session that covers this sub-area), building up a
-    running list of entries in a single cell over multiple calls.
+    one per support session that covers this sub-area), keeping the newest
+    entry at the top of the running list.
 
     `column` selects which of the four Comments cells to append to
     (0=Objective Steps, 1=Date Completed, 2=Client Signature,
     3=Support Worker Signature) - it defaults to the Objective Steps
     column, the main free-text column.
 
-    Consecutive entries are separated by either 0 or 1 blank line: if
-    `add_blank_line_before` is left as None, this is decided randomly
-    (50/50) on each call; pass True/False for deterministic control (e.g.
-    in tests).
+    Consecutive entries are separated by either 0 or 1 blank line after the
+    newly inserted entry: if `add_blank_line_before` is left as None, this is
+    decided randomly (50/50) on each call; pass True/False for deterministic
+    control (e.g. in tests).
     """
     comments_row = get_steps_table(document).rows[-1]
     cell = comments_row.cells[column]
+
+    if not cell.paragraphs:
+        cell.add_paragraph(_COMMENTS_ROW_LABEL)
+
+    insert_index = 1 if cell.paragraphs[0].text.strip().startswith(_COMMENTS_ROW_LABEL) else 0
+
     if add_blank_line_before is None:
         add_blank_line_before = random.random() < 0.5
-    if add_blank_line_before:
-        cell.add_paragraph()
-    cell.add_paragraph(entry_text)
+
+    # Insert new content near the top of the cell instead of appending at
+    # the end, so summaries appear directly under the Comments label.
+    if insert_index >= len(cell.paragraphs):
+        entry_paragraph = cell.add_paragraph(entry_text)
+    else:
+        anchor = cell.paragraphs[insert_index]
+        new_p = OxmlElement("w:p")
+        anchor._p.addprevious(new_p)
+        entry_paragraph = Paragraph(new_p, anchor._parent)
+        entry_paragraph.add_run(entry_text)
+
+    has_existing_content_after_entry = insert_index < (len(cell.paragraphs) - 1)
+    if add_blank_line_before and has_existing_content_after_entry:
+        new_p = OxmlElement("w:p")
+        entry_paragraph._p.addnext(new_p)

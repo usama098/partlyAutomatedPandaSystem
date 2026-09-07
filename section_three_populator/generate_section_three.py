@@ -8,9 +8,9 @@ session, saving one Word document per session into:
     output/<tenant_name>/Section 3/<Month Year>/<DD-MM-YYYY>.docx
 
 This module intentionally does NOT embed any evidence pictures. The JSON's
-``evidence_picture_description`` is a text description meant for a separate
-image-generation tool; here it is only copied into the Support Notes section
-as reference text (see ``fill_support_notes`` for exactly how).
+``evidence_table`` holds a markdown table (produced by a separate tool); it
+is parsed and rendered as a real Word table inside the Support Notes section
+(see ``fill_support_notes`` / ``add_markdown_table_to_cell`` for exactly how).
 
 Usage:
     py -3.11 generate_section_three.py <input_json_path> [--output OUTPUT_DIR] [--template TEMPLATE_PATH]
@@ -25,6 +25,8 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June",
@@ -41,14 +43,14 @@ LABEL_AREAS_COVERED = "Areas covered from support plan"
 LABEL_SERVICE_USER_ACTIONS = "Any actions to be completed by service user"
 LABEL_SUPPORT_WORKER_ACTIONS = "Any actions to be taken by support worker"
 
-# Text inserted between the support notes and the evidence-picture
-# description, so a human reviewer can clearly see where the notes end and
-# the picture-generation prompt begins.
+# Text inserted between the support notes and the evidence table, so a
+# human reviewer can clearly see where the notes end and the evidence
+# table begins.
 EVIDENCE_PROMPT_LABEL = "Make image from the following info"
 
 # Probability that the sub-area is also printed on its own line below the
 # main area, so generated documents don't all look identically formatted.
-SUB_AREA_INCLUSION_PROBABILITY = 0.5
+SUB_AREA_INCLUSION_PROBABILITY = 1.0
 
 INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*]')
 
@@ -86,6 +88,79 @@ def clear_paragraph(paragraph):
         run.text = ""
 
 
+# Matches inline markdown-style emphasis used in support notes:
+#   **<u>text</u>**  or  <u>**text**</u>  -> bold + underline
+#   **text**                             -> bold only
+#   <u>text</u>                          -> underline only
+INLINE_FORMATTING_RE = re.compile(
+    r"\*\*<u>(?P<bu1>.*?)</u>\*\*"
+    r"|<u>\*\*(?P<bu2>.*?)\*\*</u>"
+    r"|\*\*(?P<bold>.*?)\*\*"
+    r"|<u>(?P<underline>.*?)</u>",
+    re.DOTALL,
+)
+
+
+def add_formatted_runs(paragraph, text):
+    """
+    Add `text` to `paragraph` as one or more runs, translating the inline
+    **bold**/<u>underline</u> markdown-style markup described by
+    `INLINE_FORMATTING_RE` into actual bold/underline run formatting.
+    Embedded newlines within a run's text are rendered as line breaks by
+    python-docx automatically.
+    """
+    position = 0
+    for match in INLINE_FORMATTING_RE.finditer(text):
+        if match.start() > position:
+            paragraph.add_run(text[position:match.start()])
+
+        if match.group("bu1") is not None or match.group("bu2") is not None:
+            content = match.group("bu1") if match.group("bu1") is not None else match.group("bu2")
+            bold, underline = True, True
+        elif match.group("bold") is not None:
+            content, bold, underline = match.group("bold"), True, False
+        else:
+            content, bold, underline = match.group("underline"), False, True
+
+        run = paragraph.add_run(content)
+        run.bold = bold
+        run.underline = underline
+        position = match.end()
+
+    if position < len(text):
+        paragraph.add_run(text[position:])
+
+
+# Marks the start of the standard end-of-session questions block that
+# appears at the end of ``support_notes`` (wellbeing/safety/goal-progress
+# questions). Everything from this point onward is moved to print after the
+# evidence table instead of staying embedded mid-notes.
+QA_SECTION_MARKER_RE = re.compile(
+    r"do\s+you\s+have\s+any\s+concerns\s+with\s+your\s+wellbeing", re.IGNORECASE
+)
+
+
+def split_notes_and_qa_section(support_notes):
+    """
+    Split `support_notes` into (narrative, qa_section), where `qa_section`
+    is the trailing block of standard end-of-session questions (starting
+    from "Do you have any concerns with your wellbeing...") and `narrative`
+    is everything before it. If the marker isn't found, `qa_section` is None
+    and the full text is returned as `narrative`.
+    """
+    match = QA_SECTION_MARKER_RE.search(support_notes)
+    if match is None:
+        return support_notes, None
+
+    boundary = support_notes.rfind("\n\n", 0, match.start())
+    if boundary == -1:
+        return "", support_notes.strip()
+
+    narrative = support_notes[:boundary].rstrip()
+    qa_section = support_notes[boundary:].strip()
+    return narrative, qa_section
+
+
 def set_cell_text(cell, text, bold=False):
     """Replace a table cell's content with a single run of text."""
     paragraph = cell.paragraphs[0]
@@ -106,22 +181,56 @@ def find_label_value_row(document, label):
     raise ValueError(f'Could not find a "{label}" row in the template.')
 
 
-def find_section_content_cell(document, header_label):
+def find_section_row(document, header_label):
     """
     Find the header row whose single cell's text matches `header_label`,
-    then return the content cell in the row immediately below it.
+    then return the content row (not just its cell) immediately below it.
     """
     for table in document.tables:
         for row_index, row in enumerate(table.rows):
             if row.cells[0].text.strip() == header_label:
                 if row_index + 1 < len(table.rows):
-                    return table.rows[row_index + 1].cells[0]
+                    return table.rows[row_index + 1]
     raise ValueError(f'Could not find a "{header_label}" section in the template.')
 
 
+def find_section_content_cell(document, header_label):
+    """
+    Find the header row whose single cell's text matches `header_label`,
+    then return the content cell in the row immediately below it.
+    """
+    return find_section_row(document, header_label).cells[0]
+
+
+def set_row_cant_split(row, cant_split=True):
+    """
+    Set (or clear) the "Allow row to break across pages" option for `row`.
+    When `cant_split` is True, Word will keep the whole row together on one
+    page instead of splitting its content across a page break.
+    """
+    tr = row._tr
+    tr_pr = tr.find(qn("w:trPr"))
+    if tr_pr is None:
+        tr_pr = OxmlElement("w:trPr")
+        tr.insert(0, tr_pr)
+
+    cant_split_el = tr_pr.find(qn("w:cantSplit"))
+    if cant_split:
+        if cant_split_el is None:
+            tr_pr.append(OxmlElement("w:cantSplit"))
+    elif cant_split_el is not None:
+        tr_pr.remove(cant_split_el)
+
+
 def fill_date_client_address(document, tenant_name, session):
-    day, month, year = parse_session_date(session["session_date"])
-    set_cell_text(find_label_value_row(document, LABEL_DATE), format_display_date(day, month, year))
+    #day, month, year = parse_session_date(session["session_date"])
+    date_cell = find_label_value_row(document, LABEL_DATE)
+    #set_cell_text(date_cell, format_display_date(day, month, year))
+
+    date_with_time = session.get("date_with_time")
+    if date_with_time:
+        date_cell.add_paragraph().add_run(date_with_time)
+
     set_cell_text(find_label_value_row(document, LABEL_CLIENT_NAME), tenant_name)
     set_cell_text(find_label_value_row(document, LABEL_ADDRESS), session["property_address"])
 
@@ -158,30 +267,92 @@ def fill_areas_covered(document, area_covered, sub_area_covered, include_sub_are
         sub_area_paragraph.add_run(sub_area_covered)
 
 
-def fill_support_notes(document, support_notes, support_note_summary, evidence_picture_description):
+def parse_markdown_table(markdown_text):
+    """
+    Parse a GitHub-style markdown table into a list of rows, each a list of
+    cell strings. The header-separator row (e.g. ``|---|---|``) is skipped.
+    Rows are padded to a common column count using empty strings.
+    """
+    separator_re = re.compile(r'^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$')
+
+    rows = []
+    for line in markdown_text.strip().splitlines():
+        line = line.strip()
+        if not line or separator_re.match(line):
+            continue
+        if line.startswith("|"):
+            line = line[1:]
+        if line.endswith("|"):
+            line = line[:-1]
+        rows.append([cell.strip() for cell in line.split("|")])
+
+    if not rows:
+        return rows
+
+    num_cols = max(len(row) for row in rows)
+    return [row + [""] * (num_cols - len(row)) for row in rows]
+
+
+def add_markdown_table_to_cell(cell, markdown_text):
+    """
+    Parse `markdown_text` as a markdown table and add it as a native Word
+    table nested inside `cell`, with the header row shown in bold.
+    """
+    rows = parse_markdown_table(markdown_text)
+    if not rows:
+        return
+
+    num_rows = len(rows)
+    num_cols = len(rows[0])
+    table = cell.add_table(rows=num_rows, cols=num_cols)
+    try:
+        table.style = "Table Grid"
+    except KeyError:
+        pass
+
+    for row_index, row_values in enumerate(rows):
+        for col_index, value in enumerate(row_values):
+            table_cell = table.cell(row_index, col_index)
+            paragraph = table_cell.paragraphs[0]
+            run = paragraph.add_run(value)
+            run.bold = row_index == 0
+
+
+def fill_support_notes(document, support_notes, support_note_summary, evidence_table):
     """
     Populate the Support Notes cell with, in order:
-      1. The full support notes.
+      1. The support-notes narrative (everything before the standard
+         end-of-session questions block).
       2. A blank line.
-      3. A bold, yellow-highlighted "Make image from the following info" label.
-      4. The support note summary.
-      5. The evidence picture description.
+      3. The support note summary.
+      4. The evidence table, rendered as a native Word table (parsed from
+         the `evidence_table` markdown).
+      5. A blank line, then the standard end-of-session questions block
+         (wellbeing/safety/goal-progress questions), moved here from the
+         end of `support_notes` so it prints after the evidence table.
     """
-    cell = find_section_content_cell(document, LABEL_SUPPORT_NOTES)
+    row = find_section_row(document, LABEL_SUPPORT_NOTES)
+    cell = row.cells[0]
+
+    narrative, qa_section = split_notes_and_qa_section(support_notes)
 
     first_paragraph = cell.paragraphs[0]
     clear_paragraph(first_paragraph)
-    first_paragraph.add_run(support_notes)
+    add_formatted_runs(first_paragraph, narrative)
 
     cell.add_paragraph()  # Blank separator line.
 
-    prompt_paragraph = cell.add_paragraph()
-    prompt_run = prompt_paragraph.add_run(EVIDENCE_PROMPT_LABEL)
-    prompt_run.bold = True
-    prompt_run.font.highlight_color = WD_COLOR_INDEX.YELLOW
-
     cell.add_paragraph().add_run(support_note_summary)
-    cell.add_paragraph().add_run(evidence_picture_description)
+    cell.add_paragraph()
+    add_markdown_table_to_cell(cell, evidence_table)
+
+    if qa_section:
+        cell.add_paragraph()  # Blank separator line.
+        add_formatted_runs(cell.add_paragraph(), qa_section)
+
+    # Keep the whole Support Notes row together on one page instead of
+    # letting Word split its (often lengthy) content across a page break.
+    set_row_cant_split(row, cant_split=True)
 
 
 def fill_bullet_list(document, header_label, items):
@@ -212,7 +383,7 @@ def build_session_document(template_path, tenant_name, session_entry):
         document,
         session["support_notes"],
         session["support_note_summary"],
-        session_entry["evidence_picture_description"],
+        session_entry["evidence_table"],
     )
     fill_bullet_list(
         document,

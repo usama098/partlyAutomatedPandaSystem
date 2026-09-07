@@ -17,6 +17,7 @@
       "session_number": 1,
       "session": {
         "session_date": "27:03:2026",
+        "date_with_time": "Start Date/Time -- End Date/Time\n\n27/03/2026, 2:00 PM -- 3:00 PM",
         "property_address": "22 Example Road, B9 5BD",
         "contact_type": "In Person",
         "area_covered": "Stay Safe",
@@ -32,7 +33,7 @@
           "Prepare GP registration support for the next session."
         ]
       },
-      "evidence_picture_description": "A printable A4 move-in checklist titled 'Move-In Induction Checklist' with tick boxes for house rules, fire exits, key safety and a notes area at the bottom."
+      "evidence_table": "| Item | Details |\n|------|---------|\n| Checklist title | Move-In Induction Checklist |\n| House rules | ☐ Reviewed with tenant |\n| Fire exits | ☐ Reviewed with tenant |\n| Key safety | ☐ Reviewed with tenant |\n| Notes | Space for additional comments |"
     },
     {
       "session_number": 2,
@@ -52,7 +53,7 @@
           "Check whether the GP registration has been submitted."
         ]
       },
-      "evidence_picture_description": "A printable A4 GP registration tracker titled 'GP Registration Tracker' with a table for surgery name, date contacted, registration status and a notes area."
+      "evidence_table": "| Surgery Name | Date Contacted | Registration Status | Notes |\n|--------------|----------------|----------------------|-------|\n| | | | |\n| | | | |"
     }
   ]
 }

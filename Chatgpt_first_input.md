@@ -100,7 +100,7 @@ It must never introduce information that wasn't discussed.
 Each session contains
 
 ```json
-"evidence_picture_description"
+"evidence_table"
 ```
 
 Instead of generating an image, generate approximately **100 words** describing a printable worksheet/checklist/tracker that matches the session.
@@ -117,6 +117,35 @@ The description should describe:
 - notes area
 - printable A4 format
 - professional support worksheet
+
+---
+
+# Date With Time
+
+Each session's `session` object may contain
+
+```json
+"date_with_time"
+```
+
+This is optional. When present, it is printed directly beneath the normal
+date on the generated document, in the same field.
+
+Format:
+
+```
+Start Date/Time -- End Date/Time
+
+DD/MM/YYYY, H:MM AM/PM -- H:MM AM/PM
+```
+
+Example:
+
+```
+Start Date/Time -- End Date/Time
+
+14/09/2026, 2:00 PM -- 3:00 PM
+```
 
 ---
 
@@ -260,6 +289,8 @@ Do not create sessions for support areas that were not selected in the Initial A
 
         "session_date": "DD:MM:YYYY",
 
+        "date_with_time": "Start Date/Time -- End Date/Time\n\nDD/MM/YYYY, H:MM AM/PM -- H:MM AM/PM",
+
         "property_address": "string",
 
         "contact_type": "In Person",
@@ -283,7 +314,7 @@ Do not create sessions for support areas that were not selected in the Initial A
         ]
       },
 
-      "evidence_picture_description": "Approximately 100-word description of the worksheet/checklist/tracker to generate."
+      "evidence_table": "Approximately 100-word description of the worksheet/checklist/tracker to generate."
     }
   ]
 }
