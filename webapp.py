@@ -37,7 +37,7 @@ from section_four_populator.generate_section_four import (
     generate_documents as generate_section_four_documents,
 )
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="Templates", static_folder="static")
 app.secret_key = "paperwork-automation-dev-key"  # only used to flash form errors
 
 # Every generation run gets its own folder here, named by a random run id, so
