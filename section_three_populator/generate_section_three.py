@@ -27,6 +27,7 @@ from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.shared import Inches
 
 MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June",
@@ -51,6 +52,10 @@ EVIDENCE_PROMPT_LABEL = "Make image from the following info"
 # Probability that the sub-area is also printed on its own line below the
 # main area, so generated documents don't all look identically formatted.
 SUB_AREA_INCLUSION_PROBABILITY = 1.0
+
+# Fixed display width used for evidence images embedded at the end of the
+# Support Notes cell, so they scale to fit within the table column.
+EVIDENCE_IMAGE_WIDTH = Inches(4)
 
 INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*]')
 
@@ -318,7 +323,26 @@ def add_markdown_table_to_cell(cell, markdown_text):
             run.bold = row_index == 0
 
 
-def fill_support_notes(document, support_notes, support_note_summary, evidence_table):
+def add_images_to_cell(cell, images):
+    """
+    Add each image in `images` (a path - str or Path - or file-like object
+    per entry) to `cell`, one per paragraph, scaled to
+    `EVIDENCE_IMAGE_WIDTH` so they fit within the table column.
+    """
+    for image in images:
+        # python-docx's add_picture only recognises a plain `str` as a file
+        # path; anything else (including a pathlib.Path) is treated as an
+        # already-open, readable/seekable stream. Convert Path instances to
+        # str so on-disk images load correctly instead of erroring out with
+        # "object has no attribute 'seek'".
+        if isinstance(image, Path):
+            image = str(image)
+        paragraph = cell.add_paragraph()
+        run = paragraph.add_run()
+        run.add_picture(image, width=EVIDENCE_IMAGE_WIDTH)
+
+
+def fill_support_notes(document, support_notes, support_note_summary, evidence_table, images=None):
     """
     Populate the Support Notes cell with, in order:
       1. The support-notes narrative (everything before the standard
@@ -330,6 +354,9 @@ def fill_support_notes(document, support_notes, support_note_summary, evidence_t
       5. A blank line, then the standard end-of-session questions block
          (wellbeing/safety/goal-progress questions), moved here from the
          end of `support_notes` so it prints after the evidence table.
+      6. If `images` is given (a non-empty list of paths/file-like
+         objects), a blank line followed by each image, one per paragraph,
+         as the very last thing in the cell.
     """
     row = find_section_row(document, LABEL_SUPPORT_NOTES)
     cell = row.cells[0]
@@ -350,6 +377,10 @@ def fill_support_notes(document, support_notes, support_note_summary, evidence_t
         cell.add_paragraph()  # Blank separator line.
         add_formatted_runs(cell.add_paragraph(), qa_section)
 
+    if images:
+        cell.add_paragraph()  # Blank separator line.
+        add_images_to_cell(cell, images)
+
     # Keep the whole Support Notes row together on one page instead of
     # letting Word split its (often lengthy) content across a page break.
     set_row_cant_split(row, cant_split=True)
@@ -367,7 +398,7 @@ def fill_bullet_list(document, header_label, items):
         paragraph.add_run(f"\u2022 {item}")
 
 
-def build_session_document(template_path, tenant_name, session_entry):
+def build_session_document(template_path, tenant_name, session_entry, images=None):
     document = Document(template_path)
     session = session_entry["session"]
 
@@ -384,6 +415,7 @@ def build_session_document(template_path, tenant_name, session_entry):
         session["support_notes"],
         session["support_note_summary"],
         session_entry["evidence_table"],
+        images=images,
     )
     fill_bullet_list(
         document,
@@ -398,7 +430,15 @@ def build_session_document(template_path, tenant_name, session_entry):
     return document
 
 
-def generate_documents(input_json_path, output_dir, template_path):
+def generate_documents(input_json_path, output_dir, template_path, session_images=None):
+    """
+    `session_images`, if given, is a list where `session_images[i]` is the
+    list of images (paths or file-like objects) to embed at the end of the
+    i-th document created (in the same order as `data["sessions"]`) -
+    e.g. index 0 holds the images for the first document generated, index 1
+    the images for the second, and so on. Indices beyond the end of
+    `session_images`, or with an empty/missing entry, get no images.
+    """
     input_json_path = Path(input_json_path)
     output_dir = Path(output_dir)
     template_path = Path(template_path)
@@ -410,14 +450,15 @@ def generate_documents(input_json_path, output_dir, template_path):
     section_folder = output_dir / sanitize_folder_name(tenant_name) / SECTION_FOLDER_NAME
 
     created_files = []
-    for session_entry in data["sessions"]:
+    for index, session_entry in enumerate(data["sessions"]):
         session = session_entry["session"]
         day, month, year = parse_session_date(session["session_date"])
         month_folder_name = f"{MONTH_NAMES[month - 1]} {year}"
         month_folder = section_folder / month_folder_name
         month_folder.mkdir(parents=True, exist_ok=True)
 
-        document = build_session_document(template_path, tenant_name, session_entry)
+        images = session_images[index] if session_images and index < len(session_images) else None
+        document = build_session_document(template_path, tenant_name, session_entry, images=images)
 
         filename = format_filename_date(day, month, year) + ".docx"
         output_path = month_folder / filename

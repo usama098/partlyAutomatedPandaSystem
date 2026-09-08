@@ -1,0 +1,246 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #f2f2ea;
+}
+
+.panda-upload {
+    max-width: 1100px;
+    margin: 40px auto;
+    padding: 30px;
+    background: #fffdf7;
+    border-radius: 28px;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.panda-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.panda-face {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 12px;
+    position: relative;
+    background: white;
+    border: 4px solid #222;
+    border-radius: 50%;
+}
+
+.panda-ear {
+    width: 38px;
+    height: 38px;
+    background: #222;
+    border-radius: 50%;
+    position: absolute;
+    top: -12px;
+    z-index: -1;
+}
+
+.panda-ear.left {
+    left: 4px;
+}
+
+.panda-ear.right {
+    right: 4px;
+}
+
+.panda-eye {
+    width: 30px;
+    height: 40px;
+    background: #222;
+    border-radius: 50%;
+    position: absolute;
+    top: 32px;
+}
+
+.panda-eye.left {
+    left: 20px;
+    transform: rotate(18deg);
+}
+
+.panda-eye.right {
+    right: 20px;
+    transform: rotate(-18deg);
+}
+
+.panda-eye::after {
+    content: "";
+    width: 9px;
+    height: 9px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+}
+
+.panda-nose {
+    width: 20px;
+    height: 14px;
+    background: #222;
+    border-radius: 50%;
+    position: absolute;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.panda-mouth {
+    width: 28px;
+    height: 15px;
+    border-bottom: 3px solid #222;
+    border-radius: 50%;
+    position: absolute;
+    top: 82px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.panda-header h2 {
+    margin: 0;
+    font-size: 30px;
+    color: #222;
+}
+
+.panda-header p {
+    color: #777;
+    margin-top: 8px;
+}
+
+.panda-flash {
+    background: #fdecea;
+    color: #611a15;
+    border: 1px solid #f5c6cb;
+    padding: 12px 16px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+}
+
+.panda-text {
+    width: 100%;
+    padding: 15px 18px;
+    border: 2px solid #d8ead8;
+    border-radius: 16px;
+    font-size: 15px;
+    font-family: Consolas, monospace;
+    outline: none;
+    margin-bottom: 20px;
+    transition: 0.2s;
+    resize: vertical;
+    min-height: 320px;
+}
+
+.panda-text:focus {
+    border-color: #76b883;
+    box-shadow: 0 0 0 4px rgba(118, 184, 131, 0.15);
+}
+
+.panda-options {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 28px;
+    color: #444;
+    font-size: 15px;
+}
+
+.drop-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.drop-box {
+    min-height: 220px;
+    border: 3px dashed #9ec7a5;
+    border-radius: 22px;
+    background: #f8fff8;
+    padding: 22px;
+    text-align: center;
+    transition: 0.2s;
+    cursor: pointer;
+    position: relative;
+}
+
+.drop-box:hover {
+    background: #effbef;
+    border-color: #66a974;
+    transform: translateY(-2px);
+}
+
+.drop-box.large {
+    grid-column: 1 / -1;
+}
+
+.drop-box input[type="file"] {
+    display: none;
+}
+
+.drop-icon {
+    font-size: 42px;
+    margin-bottom: 8px;
+}
+
+.drop-box h3 {
+    margin: 6px 0;
+    font-size: 20px;
+    color: #222;
+}
+
+.drop-box p {
+    margin: 0;
+    color: #7b7b7b;
+    font-size: 14px;
+}
+
+.bamboo-row {
+    margin-top: 15px;
+    font-size: 28px;
+    letter-spacing: 4px;
+}
+
+.panda-button {
+    display: block;
+    margin: 32px auto 0;
+    padding: 15px 38px;
+    border: none;
+    border-radius: 999px;
+    background: #222;
+    color: white;
+    font-size: 17px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.panda-button:hover {
+    background: #579266;
+    transform: translateY(-2px);
+}
+
+.drop-box p.file-status {
+    color: #3a7d44;
+    font-weight: bold;
+    min-height: 18px;
+}
+
+.drop-box.active-paste-target {
+    border-color: #579266;
+    background: #effbef;
+}
+
+@media (max-width: 750px) {
+    .drop-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .drop-box.large {
+        grid-column: auto;
+    }
+}

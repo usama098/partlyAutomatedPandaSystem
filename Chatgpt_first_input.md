@@ -314,7 +314,7 @@ Do not create sessions for support areas that were not selected in the Initial A
         ]
       },
 
-      "evidence_table": "Approximately 100-word description of the worksheet/checklist/tracker to generate."
+      "evidence_table": "markdown table which is produced by chatgpt"
     }
   ]
 }

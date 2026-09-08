@@ -1,36 +1,192 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Paperwork Automation</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-    textarea { width: 100%; height: 400px; font-family: Consolas, monospace; font-size: 0.9rem; box-sizing: border-box; }
-    .checkboxes { margin: 1rem 0; }
-    button { padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; }
-    .flash { background: #fdecea; color: #611a15; border: 1px solid #f5c6cb; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-  </style>
+<meta charset="utf-8">
+<title>Panda Paperwork Automation</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%90%BC</text></svg>">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <h1>Paperwork Automation</h1>
-  <p>Paste the tenant JSON below, choose which sections to generate, then click Generate to download a .zip of the Word documents.</p>
 
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      {% for message in messages %}
-        <div class="flash">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
+<div class="panda-upload">
 
-  <form action="{{ url_for('generate') }}" method="post">
-    <textarea name="input_json" placeholder="Paste your JSON here..." required></textarea>
-    <div class="checkboxes">
-      <label><input type="checkbox" name="section3" checked> Section 3 (Support Session Notes)</label>
-      &nbsp;&nbsp;
-      <label><input type="checkbox" name="section4" checked> Section 4 (Support Plan)</label>
+    <div class="panda-header">
+
+        <div class="panda-face">
+            <div class="panda-ear left"></div>
+            <div class="panda-ear right"></div>
+
+            <div class="panda-eye left"></div>
+            <div class="panda-eye right"></div>
+
+            <div class="panda-nose"></div>
+            <div class="panda-mouth"></div>
+        </div>
+
+        <h2>Anum's Bamboo Bureaucracy 🎋</h2>
+        <p>Paste your tenant JSON below and let the panda generate the Word documents 🐼</p>
+
     </div>
-    <button type="submit">Generate documents</button>
-  </form>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="panda-flash">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form action="{{ url_for('generate') }}" method="post" enctype="multipart/form-data">
+
+        <textarea
+            class="panda-text"
+            name="input_json"
+            placeholder="Paste your JSON here..."
+            required
+        ></textarea>
+
+        <div class="panda-options">
+            <label><input type="checkbox" name="section3" checked> Section 3 (Support Session Notes)</label>
+            <label><input type="checkbox" name="section4"> Section 4 (Support Plan)</label>
+            <label><input type="checkbox" name="daily_logs" checked> Daily Case/Contact Notes</label>
+        </div>
+
+        <div class="drop-grid">
+
+            <label class="drop-box" data-box-index="1" tabindex="0">
+                <input type="file" name="images_1" accept="image/*" multiple>
+
+                <div class="drop-icon">🐼</div>
+                <h3>Panda Box 1</h3>
+                <p>Drop, select, or paste (Ctrl+V) multiple pictures</p>
+                <p class="file-status"></p>
+
+                <div class="bamboo-row">🎋 🎋 🎋</div>
+            </label>
+
+            <label class="drop-box" data-box-index="2" tabindex="0">
+                <input type="file" name="images_2" accept="image/*" multiple>
+
+                <div class="drop-icon">🐾</div>
+                <h3>Panda Box 2</h3>
+                <p>Drop, select, or paste (Ctrl+V) multiple pictures</p>
+                <p class="file-status"></p>
+
+                <div class="bamboo-row">🌿 🎋 🌿</div>
+            </label>
+
+            <label class="drop-box" data-box-index="3" tabindex="0">
+                <input type="file" name="images_3" accept="image/*" multiple>
+
+                <div class="drop-icon">🌱</div>
+                <h3>Panda Box 3</h3>
+                <p>Drop, select, or paste (Ctrl+V) multiple pictures</p>
+                <p class="file-status"></p>
+
+                <div class="bamboo-row">🐼 🌿 🐼</div>
+            </label>
+
+            <label class="drop-box" data-box-index="4" tabindex="0">
+                <input type="file" name="images_4" accept="image/*" multiple>
+
+                <div class="drop-icon">🍃</div>
+                <h3>Panda Box 4</h3>
+                <p>Drop, select, or paste (Ctrl+V) multiple pictures</p>
+                <p class="file-status"></p>
+
+                <div class="bamboo-row">🎍 🎋 🎍</div>
+            </label>
+
+            <label class="drop-box large" data-box-index="5" tabindex="0">
+                <input type="file" name="images_5" accept="image/*" multiple>
+
+                <div class="drop-icon">🐼</div>
+                <h3>Big Panda Box 5</h3>
+                <p>Drop, select, or paste (Ctrl+V) as many pictures here as you like</p>
+                <p class="file-status"></p>
+
+                <div class="bamboo-row">🎋 🐼 🎋 🐾 🎋</div>
+            </label>
+
+        </div>
+
+        <button class="panda-button" type="submit">
+            🐼 Generate documents
+        </button>
+
+    </form>
+
+</div>
+
+<script>
+    // Lets each Panda Box accept pasted images (Ctrl+V), in addition to the
+    // normal click-to-select. Hovering/focusing a box marks it as the
+    // "paste target"; a paste anywhere on the page while a box is the
+    // target adds any image(s) from the clipboard to that box's file
+    // input, on top of whatever files are already selected there.
+    (function () {
+        const boxes = Array.from(document.querySelectorAll(".drop-box"));
+        let activeBox = null;
+
+        function setActiveBox(box) {
+            if (activeBox && activeBox !== box) {
+                activeBox.classList.remove("active-paste-target");
+            }
+            activeBox = box;
+            if (activeBox) {
+                activeBox.classList.add("active-paste-target");
+            }
+        }
+
+        function updateStatus(box) {
+            const input = box.querySelector('input[type="file"]');
+            const status = box.querySelector(".file-status");
+            const count = input.files ? input.files.length : 0;
+            status.textContent = count > 0 ? `${count} image${count === 1 ? "" : "s"} added` : "";
+        }
+
+        function addFilesToInput(input, newFiles) {
+            const dataTransfer = new DataTransfer();
+            Array.from(input.files).forEach((file) => dataTransfer.items.add(file));
+            newFiles.forEach((file) => dataTransfer.items.add(file));
+            input.files = dataTransfer.files;
+        }
+
+        boxes.forEach((box) => {
+            box.addEventListener("mouseenter", () => setActiveBox(box));
+            box.addEventListener("focusin", () => setActiveBox(box));
+            box.querySelector('input[type="file"]').addEventListener("change", () => updateStatus(box));
+            updateStatus(box);
+        });
+
+        document.addEventListener("paste", (event) => {
+            if (!activeBox) return;
+
+            const items = (event.clipboardData || window.clipboardData || {}).items;
+            if (!items) return;
+
+            const imageFiles = [];
+            Array.from(items).forEach((item, index) => {
+                if (item.kind === "file" && item.type.startsWith("image/")) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        const extension = item.type.split("/")[1] || "png";
+                        imageFiles.push(
+                            new File([file], `pasted-${Date.now()}-${index}.${extension}`, { type: item.type })
+                        );
+                    }
+                }
+            });
+
+            if (imageFiles.length === 0) return;
+
+            event.preventDefault();
+            const input = activeBox.querySelector('input[type="file"]');
+            addFilesToInput(input, imageFiles);
+            updateStatus(activeBox);
+        });
+    })();
+</script>
+
 </body>
 </html>

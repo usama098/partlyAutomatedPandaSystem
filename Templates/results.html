@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Panda Paperwork Automation — Results</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%90%BC</text></svg>">
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        background: #f2f2ea;
+    }
+
+    .panda-upload {
+        max-width: 900px;
+        margin: 40px auto;
+        padding: 30px;
+        background: #fffdf7;
+        border-radius: 28px;
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08);
+        font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .panda-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .panda-face {
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 12px;
+        position: relative;
+        background: white;
+        border: 4px solid #222;
+        border-radius: 50%;
+    }
+
+    .panda-ear {
+        width: 38px;
+        height: 38px;
+        background: #222;
+        border-radius: 50%;
+        position: absolute;
+        top: -12px;
+        z-index: -1;
+    }
+
+    .panda-ear.left {
+        left: 4px;
+    }
+
+    .panda-ear.right {
+        right: 4px;
+    }
+
+    .panda-eye {
+        width: 30px;
+        height: 40px;
+        background: #222;
+        border-radius: 50%;
+        position: absolute;
+        top: 32px;
+    }
+
+    .panda-eye.left {
+        left: 20px;
+        transform: rotate(18deg);
+    }
+
+    .panda-eye.right {
+        right: 20px;
+        transform: rotate(-18deg);
+    }
+
+    .panda-eye::after {
+        content: "";
+        width: 9px;
+        height: 9px;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+    }
+
+    .panda-nose {
+        width: 20px;
+        height: 14px;
+        background: #222;
+        border-radius: 50%;
+        position: absolute;
+        top: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .panda-mouth {
+        width: 28px;
+        height: 15px;
+        border-bottom: 3px solid #222;
+        border-radius: 50%;
+        position: absolute;
+        top: 82px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .panda-header h2 {
+        margin: 0;
+        font-size: 30px;
+        color: #222;
+    }
+
+    .panda-header p {
+        color: #777;
+        margin-top: 8px;
+    }
+
+    .file-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .file-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        border: 2px solid #d8ead8;
+        border-radius: 16px;
+        margin-bottom: 12px;
+        background: #f8fff8;
+        transition: 0.2s;
+    }
+
+    .file-list li:hover {
+        background: #effbef;
+        border-color: #66a974;
+    }
+
+    .file-name {
+        color: #222;
+        font-size: 15px;
+        word-break: break-word;
+        margin-right: 12px;
+    }
+
+    .panda-button {
+        display: inline-block;
+        flex-shrink: 0;
+        margin: 0;
+        padding: 10px 26px;
+        border: none;
+        border-radius: 999px;
+        background: #222;
+        color: white;
+        font-size: 14px;
+        font-weight: bold;
+        text-decoration: none;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .panda-button:hover {
+        background: #579266;
+        transform: translateY(-2px);
+    }
+
+    .panda-button.secondary {
+        display: block;
+        margin: 32px auto 0;
+        background: transparent;
+        color: #579266;
+        border: 2px solid #579266;
+    }
+
+    .panda-button.secondary:hover {
+        background: #579266;
+        color: white;
+    }
+</style>
+</head>
+<body>
+
+<div class="panda-upload">
+
+    <div class="panda-header">
+
+        <div class="panda-face">
+            <div class="panda-ear left"></div>
+            <div class="panda-ear right"></div>
+
+            <div class="panda-eye left"></div>
+            <div class="panda-eye right"></div>
+
+            <div class="panda-nose"></div>
+            <div class="panda-mouth"></div>
+        </div>
+
+        <h2>Documents ready! 🐼</h2>
+        <p>{{ files|length }} document{{ "s" if files|length != 1 else "" }} generated for {{ tenant_name }}.</p>
+    </div>
+
+    <a class="panda-button" style="display:block; text-align:center; padding:16px; font-size:16px; margin-bottom:24px;"
+       href="{{ url_for('download_zip', run_id=run_id, zip_name=zip_name) }}">
+        🐼 Download {{ zip_name }}
+    </a>
+
+    <ul class="file-list">
+        {% for file in files %}
+            <li>
+                <span class="file-name">{{ file }}</span>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <a class="panda-button secondary" href="{{ url_for('index') }}">&larr; Generate more documents</a>
+
+</div>
+
+</body>
+</html>
