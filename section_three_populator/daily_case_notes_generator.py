@@ -3,21 +3,23 @@ Daily Case/Contact Notes generator.
 
 Reads the same tenant JSON used by ``generate_section_three.py`` (see
 ``sample_input.json``) and fills in the "daily_case_note_template.docx"
-template with:
+template with, for every calendar month that contains at least one support
+session:
 
-    1. One row per support session in the JSON (taken straight from each
-       JSON entry).
+    1. One row per support session in the JSON that falls in that month
+       (taken straight from each JSON entry).
     2. One "visited" (in-person, no full session) row and one "called"
-       (phone) row for every gap between two consecutive support
-       sessions, dated somewhere in that gap.
+       (phone) row for every Mon-Fri calendar week of that month, dated on
+       a working day (skipping England bank holidays) that isn't already
+       used by a support session that week.
 
-The visited/called dates are randomly chosen from the working days (Mon-Fri,
-skipping England bank holidays) strictly between each pair of consecutive
-session dates. Documents are split by calendar month based on each row's own
-actual date (so a gap spanning a month boundary can contribute rows to both
-months' documents). Only one Word document is generated per calendar month
-(named "<Month> daily logs.docx"), saved alongside the Section 3 documents
-(same tenant/month folder produced by ``generate_section_three.py``) into:
+Calendar weeks/months are computed with Python's standard ``calendar``
+module (``calendar.monthcalendar``), so every week and month boundary is
+exact - no manual date-arithmetic "gaps" between sessions, and no
+possibility of a row leaking into a neighbouring month. Only one Word
+document is generated per calendar month (named "<Month> daily logs.docx"),
+saved alongside the Section 3 documents (same tenant/month folder produced
+by ``generate_section_three.py``) into:
 
     output/<tenant_name>/Section 3/<Month Year>/<Month> daily logs.docx
 
@@ -26,11 +28,12 @@ Usage:
 """
 
 import argparse
+import calendar
 import random
 import re
 import sys
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import holidays
@@ -71,6 +74,10 @@ SUPPORT_SESSION_DURATION = "1 hour"
 
 TENANT_NAME_PLACEHOLDER_RE = re.compile(r"\btenant_name('s)?\b", re.IGNORECASE)
 
+# calendar.monthcalendar() rows are Mon..Sun (index 0 = Monday); only the
+# first 5 entries of each week are working days (Mon-Fri).
+WORKING_DAY_INDICES = slice(0, 5)
+
 
 def replace_tenant_name_placeholder(text, tenant_name):
     """Replace every "tenant_name" (or "tenant_name's") placeholder in `text` with `tenant_name`."""
@@ -95,57 +102,24 @@ def format_date_ddmmyy(d):
     return d.strftime("%d/%m/%y")
 
 
-def daterange(start, end):
-    """Yield every `date` from `start` to `end`, inclusive."""
-    for offset in range((end - start).days + 1):
-        yield start + timedelta(days=offset)
+def build_uk_holidays(years):
+    padded_years = set()
+    for year in years:
+        padded_years.update((year - 1, year, year + 1))
+    return holidays.UK(subdiv="England", years=sorted(padded_years))
 
 
-def working_days_strictly_between(start, end, uk_holidays):
-    """Weekdays (Mon-Fri), skipping England bank holidays, strictly between `start` and `end`."""
-    if end - start < timedelta(days=2):
-        return []
-    return [
-        d for d in daterange(start + timedelta(days=1), end - timedelta(days=1))
-        if d.weekday() < 5 and d not in uk_holidays
-    ]
-
-
-def week_bounds(d):
-    """Return (monday, friday) of the Mon-Fri working week containing date `d`."""
-    monday = d - timedelta(days=d.weekday())
-    friday = monday + timedelta(days=4)
-    return monday, friday
-
-
-def month_start(d):
-    return date(d.year, d.month, 1)
-
-
-def month_end(d):
-    if d.month == 12:
-        return date(d.year, 12, 31)
-    return date(d.year, d.month + 1, 1) - timedelta(days=1)
-
-
-def split_into_weeks(start, end):
-    """Yield (chunk_start, chunk_end) pairs splitting [start, end] (inclusive) into Mon-Fri week chunks."""
-    if start > end:
-        return
-    current = start
-    while current <= end:
-        monday, friday = week_bounds(current)
-        yield current, min(friday, end)
-        current = monday + timedelta(days=7)
-
-
-def pick_two_dates_from_pool(pool, rng):
-    """Pick two dates (possibly the same, if the pool only has one) from `pool`."""
-    if len(pool) >= 2:
-        return tuple(rng.sample(pool, 2))
-    if len(pool) == 1:
-        return pool[0], pool[0]
-    return None
+def build_support_session_event(session_entry, tenant_name, rng):
+    session = session_entry["session"]
+    day, month, year = parse_session_date(session["session_date"])
+    note = replace_tenant_name_placeholder(rng.choice(support_session_contact_note), tenant_name)
+    return {
+        "date": date(year, month, day),
+        "duration": SUPPORT_SESSION_DURATION,
+        "note": note,
+        "support_area": abbreviate_support_area(session["area_covered"]),
+        "property_address": session["property_address"],
+    }
 
 
 def build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng):
@@ -167,86 +141,42 @@ def build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng):
     ]
 
 
-def build_period_call_visit_events(start, end, tenant_name, uk_holidays, rng):
+def pick_two_dates_from_pool(pool, rng):
+    """Pick two dates (possibly the same, if the pool only has one) from `pool`."""
+    if len(pool) >= 2:
+        return tuple(rng.sample(pool, 2))
+    if len(pool) == 1:
+        return pool[0], pool[0]
+    return None
+
+
+def build_month_events(year, month, support_events_this_month, uk_holidays, tenant_name, rng):
     """
-    Build one "visited" and one "called" event for every Mon-Fri week
-    (chunked via `split_into_weeks`) that has at least one working,
-    non-bank-holiday day somewhere in [start, end] (inclusive). Used to
-    cover leftover working days before the first support session's month,
-    or after the last support session's month, so those trailing/leading
-    weeks still get a call and a visit even though there's no session
-    (or session-to-session gap) to anchor them to.
+    Build every event (support session + one call + one visit per Mon-Fri
+    calendar week) for a single calendar month, using ``calendar.monthcalendar``
+    so weeks/month boundaries are exact and no event can leak into another
+    month.
     """
+    support_by_date = {e["date"]: e for e in support_events_this_month}
     events = []
-    for chunk_start, chunk_end in split_into_weeks(start, end):
-        pool = [d for d in daterange(chunk_start, chunk_end) if d.weekday() < 5 and d not in uk_holidays]
-        picked = pick_two_dates_from_pool(pool, rng)
-        if not picked:
+
+    for week in calendar.monthcalendar(year, month):
+        working_day_numbers = week[WORKING_DAY_INDICES]
+        week_days = [date(year, month, day) for day in working_day_numbers if day != 0]
+        if not week_days:
             continue
-        visit_date, call_date = picked
-        events.extend(build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng))
+
+        sessions_this_week = [support_by_date[d] for d in week_days if d in support_by_date]
+        events.extend(sessions_this_week)
+
+        excluded = {e["date"] for e in sessions_this_week}
+        candidates = [d for d in week_days if d not in excluded and d not in uk_holidays]
+        picked = pick_two_dates_from_pool(candidates, rng)
+        if picked:
+            visit_date, call_date = picked
+            events.extend(build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng))
+
     return events
-
-
-def pick_gap_call_and_visit_dates(prev_date, next_date, uk_holidays, rng):
-    """
-    Pick two dates (one for "visited", one for "called") somewhere in the
-    working days (Mon-Fri, skipping England bank holidays) strictly between
-    `prev_date` and `next_date`. Falls back to reusing/expanding the pool if
-    the gap is too short of valid days to give two distinct dates.
-    """
-    candidates = working_days_strictly_between(prev_date, next_date, uk_holidays)
-    if len(candidates) >= 2:
-        return tuple(rng.sample(candidates, 2))
-    if len(candidates) == 1:
-        return candidates[0], candidates[0]
-
-    # Gap too short (e.g. sessions on consecutive days) - fall back to any
-    # weekday, non-holiday day in the inclusive range, excluding the
-    # session dates themselves if possible.
-    inclusive_pool = [
-        d for d in daterange(prev_date, next_date)
-        if d.weekday() < 5 and d not in uk_holidays and d not in (prev_date, next_date)
-    ]
-    if len(inclusive_pool) >= 2:
-        return tuple(rng.sample(inclusive_pool, 2))
-    if len(inclusive_pool) == 1:
-        return inclusive_pool[0], inclusive_pool[0]
-
-    fallback_pool = [
-        d for d in daterange(prev_date, next_date) if d.weekday() < 5 and d not in uk_holidays
-    ] or [prev_date, next_date]
-    return rng.choice(fallback_pool), rng.choice(fallback_pool)
-
-
-def build_uk_holidays(years):
-    padded_years = set()
-    for year in years:
-        padded_years.update((year - 1, year, year + 1))
-    return holidays.UK(subdiv="England", years=sorted(padded_years))
-
-
-def build_support_session_event(session_entry, tenant_name, rng):
-    session = session_entry["session"]
-    day, month, year = parse_session_date(session["session_date"])
-    note = replace_tenant_name_placeholder(rng.choice(support_session_contact_note), tenant_name)
-    return {
-        "date": date(year, month, day),
-        "duration": SUPPORT_SESSION_DURATION,
-        "note": note,
-        "support_area": abbreviate_support_area(session["area_covered"]),
-        "property_address": session["property_address"],
-    }
-
-
-def build_gap_events(prev_date, next_date, tenant_name, uk_holidays, rng):
-    """
-    Build the one "visited" and one "called" event dated somewhere in the
-    working days strictly between `prev_date` and `next_date`.
-    """
-    visit_date, call_date = pick_gap_call_and_visit_dates(prev_date, next_date, uk_holidays, rng)
-    return build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng)
-
 
 
 def clear_paragraph(paragraph):
@@ -315,9 +245,10 @@ def build_month_document(template_path, tenant_name, property_address, events):
 
 def generate_documents(input_json_path, output_dir, template_path=DEFAULT_TEMPLATE_PATH, seed=None):
     """
-    Generate one "<Month> daily logs.docx" document per calendar month
-    touched by any support/visited/called row, each containing every row
-    whose own date falls in that month.
+    Generate one "<Month> daily logs.docx" document per calendar month that
+    contains at least one support session, each containing every Mon-Fri
+    calendar week of that month with a support session (if any that week)
+    plus one call and one visit.
     """
     import json
 
@@ -340,57 +271,23 @@ def generate_documents(input_json_path, output_dir, template_path=DEFAULT_TEMPLA
 
     support_events = [build_support_session_event(entry, tenant_name, rng) for entry in sessions]
 
-    all_events = list(support_events)
-    for prev_event, next_event in zip(support_events, support_events[1:]):
-        all_events.extend(build_gap_events(prev_event["date"], next_event["date"], tenant_name, uk_holidays, rng))
-
-    if support_events:
-        first_date = support_events[0]["date"]
-        last_date = support_events[-1]["date"]
-        # Cover leftover working days before the first session's month (from
-        # the 1st of that month up to, but not including, the session date)
-        # and after the last session's month (from the day after the session
-        # date through to the end of that month), chunked per Mon-Fri week,
-        # so trailing/leading weeks with no session still get a call+visit.
-        all_events.extend(
-            build_period_call_visit_events(
-                month_start(first_date), first_date - timedelta(days=1), tenant_name, uk_holidays, rng
-            )
-        )
-        all_events.extend(
-            build_period_call_visit_events(
-                last_date + timedelta(days=1), month_end(last_date), tenant_name, uk_holidays, rng
-            )
-        )
-
-    events_by_month = defaultdict(list)
-    for event in all_events:
+    support_events_by_month = defaultdict(list)
+    for event in support_events:
         key = (event["date"].year, event["date"].month)
-        events_by_month[key].append(event)
-
-    # Pick the property address to print in each month's header: the
-    # address of whichever support session in that month is used, falling
-    # back to the closest support session by date for months that only
-    # contain visited/called rows (e.g. a gap spanning a month boundary).
-    address_by_month = {}
-    for (year, month) in events_by_month:
-        month_support_events = [e for e in support_events if (e["date"].year, e["date"].month) == (year, month)]
-        if month_support_events:
-            address_by_month[(year, month)] = month_support_events[0]["property_address"]
-        else:
-            reference_date = date(year, month, 1)
-            closest = min(support_events, key=lambda e: abs((e["date"] - reference_date).days))
-            address_by_month[(year, month)] = closest["property_address"]
+        support_events_by_month[key].append(event)
 
     section_folder = output_dir / sanitize_folder_name(tenant_name) / SECTION_FOLDER_NAME
 
     created_files = []
-    for (year, month), events in sorted(events_by_month.items()):
+    for (year, month), month_support_events in sorted(support_events_by_month.items()):
+        events = build_month_events(year, month, month_support_events, uk_holidays, tenant_name, rng)
+
         month_name = MONTH_NAMES[month - 1]
         month_folder = section_folder / f"{month_name} {year}"
         month_folder.mkdir(parents=True, exist_ok=True)
 
-        document = build_month_document(template_path, tenant_name, address_by_month[(year, month)], events)
+        property_address = month_support_events[0]["property_address"]
+        document = build_month_document(template_path, tenant_name, property_address, events)
 
         output_path = month_folder / f"{month_name} daily logs.docx"
         document.save(output_path)
@@ -425,4 +322,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
