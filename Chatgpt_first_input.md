@@ -269,6 +269,7 @@ Do not create sessions for support areas that were not selected in the Initial A
 ```json
 {
   "tenant_name": "string",
+  "gender": "male | female (optional, defaults to \"male\")",
 
   "list_of_support_areas_covered": [
     {

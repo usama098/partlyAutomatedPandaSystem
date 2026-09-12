@@ -1,5 +1,6 @@
 {
   "tenant_name": "Example Tenant",
+  "gender": "male",
   "move_in_date": "27:03:2026",
   "move_out_date": "20:05:2026",
   "list_of_support_areas_covered": [

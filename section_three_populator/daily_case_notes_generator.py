@@ -39,7 +39,7 @@ from pathlib import Path
 import holidays
 from docx import Document
 
-from .contact_notes import called, support_session_contact_note, visited
+from .contact_notes import get_gendered_notes
 from .generate_section_three import (
     MONTH_NAMES,
     SECTION_FOLDER_NAME,
@@ -74,9 +74,19 @@ SUPPORT_SESSION_DURATION = "1 hour"
 
 TENANT_NAME_PLACEHOLDER_RE = re.compile(r"\btenant_name('s)?\b", re.IGNORECASE)
 
+# A first name is every leading run of letters, stopping at the first
+# non-letter character (space, hyphen, comma, apostrophe, etc.).
+FIRST_NAME_RE = re.compile(r"[A-Za-z]+")
+
 # calendar.monthcalendar() rows are Mon..Sun (index 0 = Monday); only the
 # first 5 entries of each week are working days (Mon-Fri).
 WORKING_DAY_INDICES = slice(0, 5)
+
+
+def extract_first_name(tenant_name):
+    """Return just `tenant_name`'s first name (its leading run of letters)."""
+    match = FIRST_NAME_RE.match(tenant_name.strip())
+    return match.group(0) if match else tenant_name
 
 
 def replace_tenant_name_placeholder(text, tenant_name):
@@ -109,7 +119,7 @@ def build_uk_holidays(years):
     return holidays.UK(subdiv="England", years=sorted(padded_years))
 
 
-def build_support_session_event(session_entry, tenant_name, rng):
+def build_support_session_event(session_entry, tenant_name, rng, support_session_contact_note):
     session = session_entry["session"]
     day, month, year = parse_session_date(session["session_date"])
     note = replace_tenant_name_placeholder(rng.choice(support_session_contact_note), tenant_name)
@@ -122,7 +132,7 @@ def build_support_session_event(session_entry, tenant_name, rng):
     }
 
 
-def build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng):
+def build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng, called, visited):
     visited_note = replace_tenant_name_placeholder(rng.choice(visited), tenant_name)
     called_note = replace_tenant_name_placeholder(rng.choice(called), tenant_name)
     return [
@@ -150,7 +160,7 @@ def pick_two_dates_from_pool(pool, rng):
     return None
 
 
-def build_month_events(year, month, support_events_this_month, uk_holidays, tenant_name, rng):
+def build_month_events(year, month, support_events_this_month, uk_holidays, tenant_name, rng, called, visited):
     """
     Build every event (support session + one call + one visit per Mon-Fri
     calendar week) for a single calendar month, using ``calendar.monthcalendar``
@@ -174,7 +184,7 @@ def build_month_events(year, month, support_events_this_month, uk_holidays, tena
         picked = pick_two_dates_from_pool(candidates, rng)
         if picked:
             visit_date, call_date = picked
-            events.extend(build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng))
+            events.extend(build_call_and_visit_event_pair(visit_date, call_date, tenant_name, rng, called, visited))
 
     return events
 
@@ -261,6 +271,8 @@ def generate_documents(input_json_path, output_dir, template_path=DEFAULT_TEMPLA
         data = json.load(f)
 
     tenant_name = data["tenant_name"]
+    first_name = extract_first_name(tenant_name)
+    called, visited, support_session_contact_note = get_gendered_notes(data.get("gender"))
     sessions = sorted(
         data["sessions"],
         key=lambda entry: parse_session_date(entry["session"]["session_date"])[::-1],
@@ -269,7 +281,9 @@ def generate_documents(input_json_path, output_dir, template_path=DEFAULT_TEMPLA
     years = {parse_session_date(entry["session"]["session_date"])[2] for entry in sessions}
     uk_holidays = build_uk_holidays(years)
 
-    support_events = [build_support_session_event(entry, tenant_name, rng) for entry in sessions]
+    support_events = [
+        build_support_session_event(entry, first_name, rng, support_session_contact_note) for entry in sessions
+    ]
 
     support_events_by_month = defaultdict(list)
     for event in support_events:
@@ -280,7 +294,7 @@ def generate_documents(input_json_path, output_dir, template_path=DEFAULT_TEMPLA
 
     created_files = []
     for (year, month), month_support_events in sorted(support_events_by_month.items()):
-        events = build_month_events(year, month, month_support_events, uk_holidays, tenant_name, rng)
+        events = build_month_events(year, month, month_support_events, uk_holidays, first_name, rng, called, visited)
 
         month_name = MONTH_NAMES[month - 1]
         month_folder = section_folder / f"{month_name} {year}"

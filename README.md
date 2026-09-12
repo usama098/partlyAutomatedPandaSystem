@@ -56,6 +56,7 @@ Both Section 3 and Section 4 read the same input JSON:
 ```json
 {
   "tenant_name": "string",
+  "gender": "male | female (optional, defaults to \"male\")",
   "move_in_date": "DD:MM:YYYY",
   "move_out_date": "DD:MM:YYYY",
   "list_of_support_areas_covered": [
@@ -100,6 +101,11 @@ Key points:
 
 - `tenant_name` is used as the "Client Name" on every session document and as
   the top-level output folder name.
+- `gender` (`"male"` or `"female"`, case-insensitive, optional) selects which
+  pronoun-matched phrase bank the Daily Case/Contact Notes generator picks
+  its "called"/"visited"/support-session note text from (see
+  `section_three_populator/contact_notes.py`). Defaults to `"male"` when
+  omitted.
 - `move_in_date` / `move_out_date` describe the tenancy period covered by the
   whole set of sessions (`DD:MM:YYYY`). They aren't written into the
   documents themselves; they're only used to generate the session dates.
